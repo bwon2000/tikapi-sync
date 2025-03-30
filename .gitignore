@@ -1,0 +1,20 @@
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# VS Code settings
+.vscode/
+
+# OS-specific junk
+.DS_Store
+Thumbs.db
+
+# Output / temp folders
+dist/
+build/
+.cache/
