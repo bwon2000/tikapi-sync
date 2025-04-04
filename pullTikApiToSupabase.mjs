@@ -1,91 +1,117 @@
 import { createClient } from '@supabase/supabase-js';
 import TikAPI from 'tikapi';
 import dotenv from 'dotenv';
+import { format } from 'date-fns'; // For date comparison
+
 dotenv.config();
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const api = TikAPI(process.env.TIKAPI_KEY);
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-// Get all secUids
-const getSecUids = async () => {
-  const { data, error } = await supabase
-    .from('influencer_data')
-    .select('secuid, tt_username, full_name')
-    .not('secuid', 'is', null);
-
-  if (error) {
-    console.error('Error fetching secUids:', error);
-    return [];
-  }
-  return data.slice(0, 5); // Limit to 5 users for testing
-};
-
-// Fetch videos from TikAPI public endpoint
-const fetchVideos = async (secuid) => {
+/**
+ * Pulls recent TikTok videos by secUid and inserts into Supabase
+ * Only if the most recent video is older than 24 hours
+ * @param {string} secUid
+ */
+export async function pullAndSaveInfluencer(secUid) {
   try {
-    let response = await api.public.posts({ secUid: secuid, count: 30 });
+    // 1. Fetch the most recent video date from Supabase for the given secUid
+    const { data: latestVideo, error: fetchError } = await supabase
+      .from('tiktok_video_data')
+      .select('date')
+      .eq('secuid', secUid)
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('❌ Failed to fetch most recent video date:', fetchError);
+      return;
+    }
+
+    // 2. If no videos exist, allow the pull (first time pull)
+    if (!latestVideo) {
+      console.log(`🔄 No videos found for secUid ${secUid}, pulling all data.`);
+    } else {
+      // 3. Compare the most recent video's date to the current date
+      const lastVideoDate = new Date(latestVideo.date);
+      const currentDate = new Date();
+      const timeDifference = currentDate - lastVideoDate;
+      const timeDifferenceInHours = timeDifference / (1000 * 60 * 60); // Convert to hours
+
+      if (timeDifferenceInHours < 24) {
+        console.log(
+          `⚠️ Most recent video for secUid ${secUid} is less than 24 hours old. Skipping pull.`
+        );
+        return; // Exit the function if videos are too recent
+      }
+      console.log(
+        `🔄 Most recent video is more than 24 hours old. Proceeding with pull.`
+      );
+    }
+
+    // 4. Proceed with pulling TikTok videos if the condition is met
+    let response = await api.public.posts({ secUid, count: 30 });
     const allVideos = [];
 
     while (response) {
-      allVideos.push(...response?.json?.itemList || []);
-
+      allVideos.push(...(response?.json?.itemList || []));
       if (!response?.hasMore || !response?.nextItems) break;
-
       response = await Promise.resolve(response.nextItems());
     }
 
-    return allVideos;
-  } catch (err) {
-    console.error(`Failed to fetch videos for ${secuid}:`, err?.json || err.message);
-    return [];
-  }
-};
-
-// Print video data for preview
-const printVideo = (videoItem, user) => {
-  const {
-    id: video_id,
-    desc: caption,
-    createTime: create_time,
-    duration,
-    stats,
-    vq_score
-  } = videoItem;
-
-  const video_url = `https://www.tiktok.com/@${user.tt_username}/video/${video_id}`;
-
-  console.log({
-    video_id,
-    secuid: user.secuid,
-    username: user.tt_username,
-    full_name: user.full_name,
-    video_url,
-    caption,
-    views: stats?.playCount,
-    likes: stats?.diggCount,
-    comments: stats?.commentCount,
-    shares: stats?.shareCount,
-    saves: stats?.saveCount,
-    length: duration,
-    vq_score: vq_score || null,
-    date: new Date(create_time * 1000)
-  });
-};
-
-// Main runner
-(async () => {
-  const users = await getSecUids();
-
-  for (const user of users) {
-    console.log(`📥 Fetching videos for ${user.tt_username}`);
-    const videoItems = await fetchVideos(user.secuid);
-
-    for (const videoItem of videoItems) {
-      printVideo(videoItem, user); // Just print for testing
+    if (!allVideos.length) {
+      console.warn(`⚠️ No videos returned for secUid: ${secUid}`);
+      return;
     }
 
-    await new Promise((r) => setTimeout(r, 500)); // throttle to prevent hitting limits
-  }
+    const videoRows = allVideos.map((item) => {
+      const stats = item.stats || {};
+      const video = item.video || {};
 
-  console.log('✅ Test preview complete (no inserts).');
-})();
+      return {
+        video_id: item.id,
+        secuid: secUid,
+        username: item?.author?.uniqueId || null,
+        full_name: item?.author?.nickname || null,
+        account_url: `https://www.tiktok.com/@${item?.author?.uniqueId}`,
+        video_url: `https://www.tiktok.com/@${item?.author?.uniqueId}/video/${item.id}`,
+        caption: item.desc,
+        views: stats.playCount,
+        likes: stats.diggCount,
+        comments: stats.commentCount,
+        shares: stats.shareCount,
+        saves: stats.saveCount,
+        length: video.duration || null,
+        video_quality: video.videoQuality || null,
+        date: new Date(item.createTime * 1000),
+      };
+    });
+
+    const { error } = await supabase
+      .from('tiktok_video_data')
+      .insert(videoRows);
+
+    if (error) {
+      console.error('❌ Failed to insert videos:', error);
+    } else {
+      console.log(`✅ Inserted ${videoRows.length} videos.`);
+    }
+  } catch (err) {
+    const msg = err?.json?.message || err?.message || 'Unknown TikAPI error';
+    console.error(`❌ TikAPI fetch failed for secUid ${secUid}:`, msg);
+  }
+}
+
+// Optional: CLI test
+if (process.argv[1].includes('pullTikApiToSupabase.mjs')) {
+  const secUid = process.argv[2];
+  if (!secUid) {
+    console.error('❌ Please provide a secUid as an argument.');
+    process.exit(1);
+  }
+  pullAndSaveInfluencer(secUid);
+}
