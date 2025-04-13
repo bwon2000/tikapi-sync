@@ -1,4 +1,4 @@
-import { resolveAndSyncInfluencer } from '../resolveAndSyncInfluencer.js'; // Adjust the path as necessary
+import { resolveAndSyncInfluencer } from '../internal/resolveAndSyncInfluencer.js'; // Adjust the path as necessary
 
 export default async function handler(req, res) {
   const { username } = req.query;

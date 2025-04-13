@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import { resolveUsernameToSecUid } from './api/resolveUsernameToSecUid.js';
-import { upsertInfluencer } from './api/upsertInfluencer.js';
-import { updateInfluencerData } from './api/updateInfluencerData.js'; // NEW
+import { resolveUsernameToSecUid } from '../api/resolveUsernameToSecUid.js';
+import { upsertInfluencer } from '../api/upsertInfluencer.js';
+import { updateInfluencerData } from '../api/updateInfluencerData.js'; // NEW
 dotenv.config();
 
 const supabase = createClient(
