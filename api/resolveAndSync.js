@@ -1,4 +1,3 @@
-import { NextApiRequest, NextApiResponse } from 'next';
 import resolveAndSyncInfluencer from '../internal/resolveAndSyncInfluencer.js';
 
 export default async function handler(req, res) {
