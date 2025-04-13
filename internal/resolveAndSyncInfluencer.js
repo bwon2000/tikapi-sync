@@ -15,7 +15,7 @@ const supabase = createClient(
  * @param {string} username
  * @returns {object|null} influencer_data row after sync
  */
-export async function resolveAndSync(username) {
+export default async function resolveAndSync(username) {
   const normalizedUsername = username.trim().toLowerCase();
 
   // 1. Check if influencer already exists
