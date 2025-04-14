@@ -1,22 +1,21 @@
-import { resolveAndSyncInfluencer } from '../../resolveAndSyncInfluencer.js'; // update path if needed
+import resolveAndSync from '../internal/resolveAndSyncInfluencer.js';
 
 export default async function handler(req, res) {
-  const username = req.query.username;
+  const { username } = req.query;
 
   if (!username) {
     return res.status(400).json({ error: 'Missing username' });
   }
 
-  console.log(`🔍 Resolving TikAPI info for ${username}...`);
-
   try {
-    await resolveAndSyncInfluencer(username.toString());
+    await resolveAndSync(username.toString());
     return res.status(200).json({ success: true, message: `Synced ${username}` });
   } catch (err) {
     console.error('❌ Sync failed:', err);
     return res.status(500).json({ error: 'Sync failed', detail: err.message });
   }
 }
+
 
 // This is a Next.js API route that resolves a TikTok username to secUid and syncs the influencer data.
 // It uses the resolveAndSyncInfluencer function from the resolveAndSyncInfluencer.js file.
