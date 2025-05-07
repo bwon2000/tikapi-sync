@@ -1,78 +1,58 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from '../env.js';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-/**
- * Calculate rollups (average views, likes, comments, etc.) for an influencer
- * @param {string} secUid
- */
-export async function calcRollups(secUid) {
-  try {
-    const { data: videos, error } = await supabase
-      .from('tiktok_video_data')
-      .select('views, likes, comments, shares')
-      .eq('secuid', secUid);
+export async function calcAndUpdateInfluencerAverages(tt_username) {
+  // 1. Get last 30 videos for the influencer
+  const { data: videos, error } = await supabase
+    .from('tiktok_video_data')
+    .select('views, likes, comments, saves, shares')
+    .eq('username', tt_username)
+    .order('created_at', { ascending: false })
+    .limit(30);
 
-    if (error) {
-      console.error(
-        `❌ Error fetching video data for secUid ${secUid}:`,
-        error
-      );
-      return;
-    }
-
-    if (!videos.length) {
-      console.log(`❌ No videos found for secUid ${secUid}`);
-      return;
-    }
-
-    // Calculate averages
-    const totalViews = videos.reduce((acc, video) => acc + video.views, 0);
-    const totalLikes = videos.reduce((acc, video) => acc + video.likes, 0);
-    const totalComments = videos.reduce(
-      (acc, video) => acc + video.comments,
-      0
-    );
-    const totalShares = videos.reduce((acc, video) => acc + video.shares, 0);
-
-    const avgViews = totalViews / videos.length;
-    const avgLikes = totalLikes / videos.length;
-    const avgComments = totalComments / videos.length;
-    const avgShares = totalShares / videos.length;
-
-    const rollups = {
-      avg_views: avgViews,
-      avg_likes: avgLikes,
-      avg_comments: avgComments,
-      avg_shares: avgShares,
-    };
-
-    // Update influencer data with rollups
-    const { error: updateError } = await supabase
-      .from('influencer_data')
-      .update(rollups)
-      .eq('secuid', secUid);
-
-    if (updateError) {
-      console.error('❌ Error updating rollups:', updateError);
-    } else {
-      console.log(`✅ Successfully updated rollups for secUid ${secUid}`);
-    }
-  } catch (err) {
-    console.error('❌ Error in calcRollups:', err.message || err);
+  if (error || !videos?.length) {
+    console.warn(`No videos found or error: ${error?.message}`);
+    return;
   }
-}
 
-if (process.argv[1].includes('calcRollups.js')) {
-  const secUid = process.argv[2];
-  if (!secUid) {
-    console.error('❌ Please provide a secUid as an argument.');
-    process.exit(1);
+  // 2. Calculate averages
+  const sum = { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 };
+  videos.forEach(v => {
+    sum.views += v.views || 0;
+    sum.likes += v.likes || 0;
+    sum.comments += v.comments || 0;
+    sum.saves += v.saves || 0;
+    sum.shares += v.shares || 0;
+  });
+
+  const count = videos.length;
+  const avg_views = Math.round(sum.views / count);
+  const avg_likes = Math.round(sum.likes / count);
+  const avg_comments = Math.round(sum.comments / count);
+  const avg_saves = Math.round(sum.saves / count);
+  const avg_shares = Math.round(sum.shares / count);
+  const avg_engagement = avg_likes + avg_comments + avg_saves + avg_shares;
+  const avg_er = avg_views > 0 ? avg_engagement / avg_views : null;
+
+  // 3. Update influencer_data
+  const { error: updateError } = await supabase
+    .from('influencer_data')
+    .update({
+      avg_views,
+      avg_likes,
+      avg_comment: avg_comments,
+      avg_saves,
+      avg_shares,
+      avg_er,
+      updated_at: new Date().toISOString()
+    })
+    .eq('tt_username', tt_username);
+
+  if (updateError) {
+    console.error(`Failed to update influencer_data for ${tt_username}`, updateError);
+  } else {
+    console.log(`Updated influencer_data for ${tt_username}`);
   }
-  calcRollups(secUid);
 }

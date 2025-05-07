@@ -15,30 +15,34 @@ const supabase = createClient(
  */
 export async function updateInfluencerData(existingData, username) {
   const resolved = await resolveUsernameToSecUid(username);
-
   const updatePayload = {};
 
-  if (!existingData?.followers && resolved?.metrics?.followers) {
-    updatePayload.followers = resolved?.metrics?.followers;
-  }
+  const metrics = resolved?.metrics || {};
 
-  if (!existingData?.following && resolved?.metrics?.following) {
-    updatePayload.following = resolved?.metrics?.following;
-  }
+  const safeUpdate = (field, value) => {
+    if (
+      !existingData?.[field] && // original field is missing/falsy
+      value !== undefined && value !== null
+    ) {
+      updatePayload[field] = value;
+      console.log(`📌 Updating ${field}: ${value}`);
+    }
+  };
 
-  if (!existingData?.account_likes && resolved?.metrics?.account_likes) {
-    updatePayload.account_likes = resolved?.metrics?.account_likes;
-  }
+  safeUpdate('followers', metrics.followers);
+  safeUpdate('following', metrics.following);
+  safeUpdate('account_likes', metrics.account_likes);
+  safeUpdate('ttseller', metrics.ttseller);
+  safeUpdate('tt_url', metrics.tt_url);
 
-  if (!existingData?.ttseller && resolved?.metrics?.ttseller) {
-    updatePayload.ttseller = resolved?.metrics?.ttseller;
-  }
-
+  // Special case: Only update email if it doesn't already exist
   if (!existingData?.email && resolved?.email) {
-    updatePayload.email = resolved?.email;
+    updatePayload.email = resolved.email;
+    console.log(`📧 Updating missing email: ${resolved.email}`);
+  } else if (existingData?.email) {
+    console.log(`✋ Skipping email update — already exists: ${existingData.email}`);
   }
 
-  // Perform the update if there is any data to update
   if (Object.keys(updatePayload).length > 0) {
     const { error } = await supabase
       .from('influencer_data')
@@ -46,9 +50,11 @@ export async function updateInfluencerData(existingData, username) {
       .eq('tt_username', username);
 
     if (error) {
-      console.error('❌ Failed to update influencer data:', error);
+      console.error(`❌ Failed to update ${username}:`, error);
     } else {
       console.log(`✅ Updated influencer ${username} with missing data.`);
     }
+  } else {
+    console.log(`🔁 No update needed for ${username}.`);
   }
 }

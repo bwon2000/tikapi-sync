@@ -31,10 +31,11 @@ export async function resolveUsernameToSecUid(username) {
       updated_at: new Date().toISOString(),
     };
 
-    console.log(
-      '🧪 Final influencerData before upsert:\n',
-      JSON.stringify(metrics, null, 2)
-    );
+    // 🔍 Enhanced logging
+    console.log(`🎯 TikAPI resolved for ${username}`);
+    console.log('👉 secUid:', secUid);
+    console.log('📧 Email (from bio):', email);
+    console.log('📊 Metrics:\n', JSON.stringify(metrics, null, 2));
 
     return { secUid, email, metrics };
   } catch (err) {
