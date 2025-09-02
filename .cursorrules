@@ -1,0 +1,309 @@
+# TikAPI Sync - Cursor Rules
+
+## 🔐 Source-of-Truth Contract (MANDATORY)
+
+**README.md is the product contract. Cursor MUST:**
+1. Treat "Planned Changes" as the only allowed scope
+2. Ask before expanding scope or creating new files not listed there
+3. Generate code in thin, testable slices that map to README "Planned Changes" items
+4. Keep docs and code in sync—if they drift, update README first, then code
+5. Include tests, minimal rollout/rollback notes, and update checklists in README
+
+**Protected invariants (do not silently change):**
+- Supabase tables: `influencer_data`, `tiktok_video_data`, `campaigns`, `campaigns_influencers`
+- Storage bucket: `profile-images` (public read; service-role insert/update)
+- Ports: backend 3001, frontend 3000
+- Tech stack as listed in README **Tech Stack**
+
+## 🚨 CRITICAL ENFORCEMENT RULES
+
+### Before ANY Multi-File Changes
+```bash
+# MANDATORY: Run drift detection first
+npm run docs:drift
+# If drift exists, fix documentation FIRST before any code changes
+```
+
+### Cursor Session Workflow
+- **Kickoff**: Read README and .cursorrules end-to-end, output scope summary and ticket plan
+- **Implementation**: Every ticket must map to README "Planned Changes" items
+- **Pre-merge**: Run contract check against README/.cursorrules before any merge
+
+### When Adding Environment Variables
+- Update `.env.example` AND `DEPLOY.md` in the same commit
+- Never add env vars without documentation
+- Reference README "Planned Changes" item in commit message
+
+### Environment File Safety
+- **NEVER overwrite existing `.env` files during testing**
+- Always backup `.env` before any operations: `cp .env .env.backup`
+- Use `cp .env.example .env.test` for testing, not `.env`
+- Check if `.env` exists before copying: `[ -f .env ] && echo "STOP: .env exists!"`
+
+### Database Safety (Multi-Layer Protection)
+- **CRITICAL**: Never run destructive SQL queries without explicit user confirmation
+- **Guardian validation**: All database operations must pass `npm run db:validate` first
+- **Whitelist enforcement**: Use `npm run db:safe` for command execution protection
+- **Read-only first**: Always test with SELECT queries before any modifications
+- **Backup before changes**: Document backup strategy for production changes
+- **Production protection**: Use SERVICE_ROLE_KEY only for legitimate operations
+- **Query validation**: Validate all user-provided SQL before execution
+- **Bypass prevention**: Multiple layers detect and prevent safety circumvention
+
+### Commit Message Requirements
+- Must reference README Planned Changes IDs: `Implements: README.md#planned-changes - [item ID]`
+- Format: `type(scope): description\n\nImplements: README.md#planned-changes - [specific item]`
+
+### Definition of Done (Merge Gate)
+- [ ] PR references one item in README **Active Development**
+- [ ] README updated (if behavior, routes, env, or structure changed)
+- [ ] Drift checks pass: `npm run docs:drift`
+- [ ] Tests added/updated and passing (unit + any needed integration)
+- [ ] Migrations shipped with rollback notes (if DB touched)
+- [ ] RLS/storage policies unchanged or explicitly diffed in PR description
+- [ ] Security: input validation on new endpoints; rate limit if public
+
+---
+
+## Coding Standards
+
+### Language & Formatting
+- **JavaScript**: ES6+ syntax, prefer `const`/`let` over `var`
+- **Max function length**: 50 lines (break into smaller functions)
+- **Indentation**: 2 spaces, no tabs
+- **Semicolons**: Required (enforced by ESLint)
+- **Quotes**: Single quotes for strings, double quotes in JSX
+- **Line length**: 100 characters max
+- **File naming**: camelCase for utilities, PascalCase for React components
+
+### Code Organization
+- **Imports**: Group by: Node modules → Local modules → Relative imports
+- **Functions**: Pure functions preferred, document side effects
+- **Constants**: UPPER_SNAKE_CASE for module-level constants
+- **Comments**: JSDoc for public functions, inline for complex logic
+- **File structure**: Export main function as default, utilities as named exports
+
+## Error Handling Conventions
+
+### Never Throw Raw Errors
+```javascript
+// ❌ Wrong
+throw new Error('Something failed');
+
+// ✅ Correct
+console.error('❌ Failed to process:', error?.message || error);
+return { success: false, error: error?.message || 'Unknown error' };
+```
+
+### Use Typed Results Pattern
+```javascript
+// API responses should return structured objects
+export async function fetchData(id) {
+  try {
+    const result = await api.get(id);
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('❌ Fetch failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+```
+
+### Logging Standards
+- **Success**: `console.log('✅ Description:', data)`
+- **Errors**: `console.error('❌ Description:', error)`
+- **Warnings**: `console.warn('⚠️ Description:', context)`
+- **Info**: `console.log('🔍 Description:', details)`
+- **Process**: `console.log('🚀 Starting process...')`
+
+## Testing Requirements
+
+### When Code Changes, Test These Areas
+1. **API endpoints**: Test request/response with curl or Postman
+2. **Database operations**: Verify upsert logic doesn't corrupt data
+3. **TikAPI integration**: Check rate limits and error handling
+4. **React components**: Test props, state changes, and user interactions
+5. **Environment variables**: Ensure new vars work in development and production
+
+### Test Coverage Standards
+- **Critical paths**: 100% (data sync, API routes)
+- **Utilities**: 80% (pure functions, formatters)
+- **UI components**: Basic render and interaction tests
+- **Integration**: End-to-end sync workflow
+
+### Test Commands
+```bash
+# React tests
+cd client && npm test
+
+# Linting
+npm run lint
+
+# Manual API testing
+curl -X POST http://localhost:3001/sync-influencer \
+  -H "Content-Type: application/json" \
+  -d '{"username": "test"}'
+```
+
+### Terminal Command Guidelines
+- **NEVER use complex multi-line echo commands** that cause shell to hang with 'dquote>'
+- Use simple, single-line echo statements or printf instead
+- Avoid special characters (•, ✅, ❌) in terminal commands that can cause parsing issues
+- For status updates, use simple text without complex formatting
+- If providing summaries, use comments or separate the summary from terminal commands
+
+## Repository Hygiene
+
+### No Secrets in Code
+- **Environment variables**: Use `.env` files, never hardcode
+- **API keys**: Reference via `process.env.KEY_NAME`
+- **Database credentials**: Use Supabase environment variables
+- **Debug data**: Remove console.logs with sensitive information before commit
+
+### Environment File Protection
+- **CRITICAL**: Never overwrite existing `.env` files with `cp .env.example .env`
+- **Always backup first**: `cp .env .env.backup.$(date +%Y%m%d_%H%M%S)`
+- **For testing**: Use `.env.test` or `.env.local`, never overwrite `.env`
+- **Check before copy**: `[ -f .env ] && echo "WARNING: .env exists, backup first!"`
+
+### Documentation Updates Required When:
+- **Adding environment variables**: Update `.env.example` and `DEPLOY.md`
+- **New API routes**: Update `ARCHITECTURE.md` data flow section
+- **New background jobs**: Document in `README.md` common tasks
+- **External dependencies**: Update tech stack in `README.md`
+- **Deployment changes**: Update `DEPLOY.md` configuration
+
+### File Organization Rules
+- **No orphaned files**: Remove unused imports and files
+- **Consistent naming**: Follow project conventions
+- **Clean imports**: Remove unused imports before commit
+- **Single responsibility**: One main purpose per file
+
+## Vercel Deployment Guardrails
+
+### No Hardcoded URLs
+```javascript
+// ❌ Wrong
+const API_URL = 'http://localhost:3001';
+
+// ✅ Correct
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? process.env.NEXT_PUBLIC_API_URL 
+  : 'http://localhost:3001';
+```
+
+### Use Environment Variables
+- **API endpoints**: Configure via environment variables
+- **Feature flags**: Use env vars for conditional features
+- **External services**: All credentials via env vars
+- **Build settings**: Document in `DEPLOY.md`
+
+### Document Configuration Changes
+- **New environment variables**: Add to `.env.example` with comments
+- **Build changes**: Update `DEPLOY.md` build settings
+- **Route changes**: Update `vercel.json` if needed
+- **Function configuration**: Document in `DEPLOY.md`
+
+## Commit Style
+
+### Conventional Commits
+```bash
+# Format: type(scope): description
+feat(api): add bulk influencer sync endpoint
+fix(client): resolve CORS issue in production
+docs(readme): update installation instructions
+refactor(utils): extract email validation logic
+test(api): add integration tests for sync workflow
+```
+
+### Commit Types
+- **feat**: New features
+- **fix**: Bug fixes
+- **docs**: Documentation changes
+- **style**: Code style changes (no logic changes)
+- **refactor**: Code refactoring
+- **test**: Adding or updating tests
+- **chore**: Maintenance tasks
+
+### Commit Scope
+- **api**: Backend API changes
+- **client**: React frontend changes
+- **internal**: Background job changes
+- **utils**: Utility function changes
+- **deploy**: Deployment configuration
+- **docs**: Documentation updates
+
+## Docs-as-Spec Enforcement
+
+### **Documentation-First Development**
+**CRITICAL**: README.md, ARCHITECTURE.md, and DEPLOY.md are the source of truth. Code must align with documentation.
+
+### Before Any Code Changes
+```bash
+# 1. MANDATORY: Check documentation drift first
+npm run docs:drift
+
+# 2. If drift exists, fix documentation FIRST before any code changes
+# 3. Update README "Planned Changes" section first
+# Move item from "Backlog" to "Active Development"
+
+# 4. Update ARCHITECTURE.md if adding routes/modules
+# 5. Update DEPLOY.md if changing deployment requirements
+
+# 6. Commit documentation changes first
+git add README.md ARCHITECTURE.md DEPLOY.md
+git commit -m "docs: plan implementation of [feature]"
+```
+
+### During Implementation
+- **Every commit**: Must reference a checklist item from README "Planned Changes"
+- **Commit format**: `type(scope): description\n\nImplements: README.md#planned-changes - [item ID]`
+- **No code without docs**: If documentation doesn't describe it, update docs first
+- **Environment variables**: When adding new env vars, update .env.example AND DEPLOY.md in the same commit
+
+### After Implementation
+```bash
+# 1. Mark checklist item complete in README
+# 2. Run drift detection to verify alignment
+./scripts/check-docs-drift.sh
+
+# 3. Update any implementation details that changed
+# 4. Commit documentation updates
+git add README.md ARCHITECTURE.md DEPLOY.md
+git commit -m "docs: mark [feature] complete, update implementation details"
+```
+
+## Multi-File Edit Guidelines
+
+### Propose Changes in Small, Reviewable Batches
+1. **MANDATORY Pre-check**: Run `npm run docs:drift` before applying multi-file changes
+2. **Documentation first**: Update README "Planned Changes" before code
+3. **Single feature per PR**: Don't mix unrelated changes
+4. **Logical grouping**: Related files changed together
+5. **Clear description**: Explain the why, not just the what
+6. **Test instructions**: Provide steps to verify changes
+7. **Breaking changes**: Call out any breaking changes clearly
+
+### Change Planning Process
+1. **Update README**: Add/move item in "Planned Changes" section
+2. **Identify affected files**: List all files that need changes
+3. **Order dependencies**: Documentation → dependencies → consumers
+4. **Test incrementally**: Test after each logical group of changes
+5. **Document impacts**: Note any configuration or environment changes
+
+### MANDATORY Review Checklist (Source-of-Truth Contract)
+- [ ] **Source-of-Truth**: Changes map to README "Planned Changes" Active Development item
+- [ ] **Pre-check**: `npm run docs:drift` run before multi-file changes
+- [ ] **Environment safety**: If `.env` exists, backed up before any operations
+- [ ] **Database safety**: No destructive queries without explicit confirmation
+- [ ] **Protected invariants**: No silent changes to Supabase tables, storage bucket, ports, or tech stack
+- [ ] **Drift check**: `npm run docs:drift` passes
+- [ ] **Environment variables**: New env vars documented in BOTH .env.example AND DEPLOY.md
+- [ ] **Commit messages**: Reference README Planned Changes IDs
+- [ ] **UI/UX changes**: Reference UI_STYLING_GUIDE.md and complete pre-change checklist
+- [ ] **Database operations**: Follow .cursorrules-protection.md multi-layer safety
+- [ ] Error handling follows project patterns
+- [ ] Logging uses consistent format (simple text, no complex formatting)
+- [ ] No hardcoded values or secrets
+- [ ] Tests added/updated and passing
+- [ ] README "Planned Changes" item marked complete

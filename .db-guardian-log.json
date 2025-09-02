@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-08-25T06:00:39.612Z",
+  "checksums": {
+    "scripts/db-query.js": "641413241d9c5fe4bbcb16bf2786e092dd60ee0e1a90aba30703d61fbe91a317",
+    "scripts/db-inspect.js": "73288fb3fb912f8e986698f28de8794e39e326e7f781f3664ecf1f77784f1d60",
+    ".cursorrules": "30ceb98e3e4e54c64f456bb88c3bc62e9a8f9bf02c470879a7c9a770774463a5",
+    "package.json": "5450ea10cbc8ec0b99b9525de84ce3c00e22c4ea4fe06e1e212eed87731692df"
+  },
+  "patterns_validated": true,
+  "guardian_version": "1.0.0"
+}

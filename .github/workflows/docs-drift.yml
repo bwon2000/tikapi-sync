@@ -1,0 +1,59 @@
+name: Docs-as-Spec Drift Check
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install jq (for script parsing)
+        run: sudo apt-get update && sudo apt-get install -y jq
+        
+      - name: Run documentation drift check
+        run: npm run docs:drift
+        
+      - name: Comment on PR if drift detected
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🚨 Documentation Drift Detected
+              
+              This PR cannot be merged because the code has diverged from documentation specifications.
+              
+              **Required Actions:**
+              1. Run \`npm run docs:drift\` locally to see specific issues
+              2. Update README.md "Planned Changes" section first
+              3. Update ARCHITECTURE.md and DEPLOY.md if needed
+              4. Commit documentation changes
+              5. Implement code changes
+              6. Mark planned changes as complete
+              
+              **Docs-as-Spec Enforcement:**
+              - README.md, ARCHITECTURE.md, and DEPLOY.md are the source of truth
+              - All code changes must reference a checklist item from README "Planned Changes"
+              - Documentation must be updated before code implementation
+              
+              Re-run checks after fixes: \`npm run docs:drift\``
+            })
