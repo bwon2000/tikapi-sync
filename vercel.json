@@ -1,11 +1,18 @@
 {
   "version": 2,
-  "functions": {
-    "index.mjs": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 30
+  "builds": [
+    {
+      "src": "index.mjs",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "client/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
     }
-  },
+  ],
   "routes": [
     {
       "src": "/api/(.*)",
